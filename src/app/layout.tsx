@@ -18,20 +18,27 @@ export const metadata: Metadata = {
   description: "AI-powered claims analysis for Irish GP practices",
 };
 
+// ClerkProvider needs valid keys — skip it when keys aren't configured yet
+const hasClerkKeys = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
-        >
-          {children}
-        </body>
-      </html>
-    </ClerkProvider>
+  const body = (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+      >
+        {children}
+      </body>
+    </html>
   );
+
+  if (hasClerkKeys) {
+    return <ClerkProvider>{body}</ClerkProvider>;
+  }
+
+  return body;
 }
