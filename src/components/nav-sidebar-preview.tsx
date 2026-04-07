@@ -15,7 +15,7 @@ const navItems = [
   { href: "/preview", label: "Dashboard", icon: LayoutDashboard },
   { href: "/preview/upload", label: "Upload Data", icon: Upload },
   { href: "/preview/findings", label: "Findings", icon: AlertTriangle },
-  { href: "/preview/actions", label: "Actions", icon: CheckCircle2 },
+  { href: "/preview/actions", label: "Recovery Centre", icon: CheckCircle2 },
 ];
 
 export function NavSidebarPreview() {

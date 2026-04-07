@@ -1,110 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AIAssistant } from "@/components/ai-assistant";
 
-// ── Severity badge styles ──────────────────────────────────────────
-const severityStyles: Record<string, string> = {
-  critical: "bg-red-100 text-red-800 border-red-200",
-  high: "bg-orange-100 text-orange-800 border-orange-200",
-  medium: "bg-amber-100 text-amber-800 border-amber-200",
-  low: "bg-blue-100 text-blue-800 border-blue-200",
-};
-
-const statusStyles: Record<string, string> = {
-  open: "bg-slate-100 text-slate-700 border-slate-200",
-  "in-progress": "bg-blue-100 text-blue-700 border-blue-200",
-  submitted: "bg-purple-100 text-purple-700 border-purple-200",
-  confirmed: "bg-green-100 text-green-700 border-green-200",
-  resolved: "bg-green-100 text-green-700 border-green-200",
-  dismissed: "bg-gray-100 text-gray-500 border-gray-200",
-};
-
-// ── HSE Health Regions with county mappings ────────────────────────
-// 6 regions established under HSE reform (2024)
-const hseRegions = [
-  {
-    name: "HSE Dublin & North East",
-    counties: ["Dublin", "Meath", "Louth", "Cavan", "Monaghan"],
-    contact: "Regional office, Dr Steevens' Hospital, Dublin 8",
-    phone: "01 635 2500",
-  },
-  {
-    name: "HSE Dublin & Midlands",
-    counties: ["Dublin (West)", "Kildare", "Laois", "Offaly", "Westmeath", "Longford"],
-    contact: "Regional office, Tullamore, Co. Offaly",
-    phone: "057 935 7800",
-  },
-  {
-    name: "HSE South East",
-    counties: ["Wicklow", "Wexford", "Waterford", "Kilkenny", "Carlow", "Tipperary (South)"],
-    contact: "Regional office, Lacken, Kilkenny",
-    phone: "056 778 4100",
-  },
-  {
-    name: "HSE South West",
-    counties: ["Cork", "Kerry"],
-    contact: "Regional office, Model Business Park, Cork",
-    phone: "021 492 8500",
-  },
-  {
-    name: "HSE West & North West",
-    counties: ["Galway", "Mayo", "Roscommon", "Sligo", "Leitrim", "Donegal"],
-    contact: "Regional office, Merlin Park, Galway",
-    phone: "091 775 400",
-  },
-  {
-    name: "HSE Mid West",
-    counties: ["Clare", "Limerick", "Tipperary (North)"],
-    contact: "Regional office, Catherine Street, Limerick",
-    phone: "061 483 369",
-  },
-];
-
-// ── PCRS Resource Links ───────────────────────────────────────────
-const pcrsResources = [
-  {
-    label: "PCRS Online (GP Suite)",
-    url: "https://www.sspcrs.ie/portal/nmco-api/login",
-    description: "Submit and manage STC claims, view payment schedules",
-  },
-  {
-    label: "GP Circulars",
-    url: "https://www.hse.ie/eng/staff/pcrs/circulars/gp/",
-    description: "Latest PCRS circulars, fee updates, and policy changes",
-  },
-  {
-    label: "PCRS Doctors Handbook",
-    url: "https://assets.hse.ie/media/documents/PCRS_handbook_for_Doctors.pdf",
-    description: "Complete reference for GMS claim types and procedures",
-  },
-  {
-    label: "CDM Programme Guide",
-    url: "https://www.hse.ie/eng/about/who/gmscontracts/2019agreement/chronic-disease-management-programme/",
-    description: "Chronic Disease Management claiming rules and templates",
-  },
-  {
-    label: "Contact PCRS",
-    url: "https://www.hse.ie/eng/staff/pcrs/contact-pcrs/",
-    description: "Full PCRS contact details and office information",
-  },
-  {
-    label: "GMS Contract (2019 Agreement)",
-    url: "https://www.hse.ie/eng/about/who/gmscontracts/2019agreement/",
-    description: "Full GMS contract terms including CDM and STC schedules",
-  },
-];
-
-// ── Action playbooks with step-by-step workflows ──────────────────
-type ActionStatus = "open" | "in-progress" | "submitted" | "confirmed";
+// ── Types ─────────────────────────────────────────────────────────
+type ActionStatus = "not-started" | "in-progress" | "submitted" | "confirmed";
 
 interface PlaybookStep {
   step: number;
@@ -115,791 +17,775 @@ interface PlaybookStep {
 
 interface ActionItem {
   id: string;
-  severity: string;
+  severity: "critical" | "high" | "medium" | "low";
   status: ActionStatus;
   title: string;
+  shortTitle: string;
   description: string;
   impact: number | null;
   category: string;
+  estimatedTime: string;
   playbook: PlaybookStep[];
 }
 
-const openActions: ActionItem[] = [
+// ── Traffic light colours ─────────────────────────────────────────
+const trafficLight: Record<ActionStatus, { dot: string; bg: string; label: string }> = {
+  "not-started": { dot: "bg-red-500", bg: "bg-red-50 border-red-200", label: "Not Started" },
+  "in-progress": { dot: "bg-amber-500", bg: "bg-amber-50 border-amber-200", label: "In Progress" },
+  submitted: { dot: "bg-blue-500", bg: "bg-blue-50 border-blue-200", label: "Submitted" },
+  confirmed: { dot: "bg-green-500", bg: "bg-green-50 border-green-200", label: "Confirmed" },
+};
+
+const severityStyles: Record<string, string> = {
+  critical: "bg-red-100 text-red-800 border-red-200",
+  high: "bg-orange-100 text-orange-800 border-orange-200",
+  medium: "bg-amber-100 text-amber-800 border-amber-200",
+  low: "bg-blue-100 text-blue-800 border-blue-200",
+};
+
+// ── PCRS resources (used in stepper sidebar) ──────────────────────
+const quickLinks = [
+  { label: "PCRS Online (GP Suite)", url: "https://www.sspcrs.ie/portal/nmco-api/login" },
+  { label: "GP Circulars", url: "https://www.hse.ie/eng/staff/pcrs/circulars/gp/" },
+  { label: "Doctors Handbook (PDF)", url: "https://assets.hse.ie/media/documents/PCRS_handbook_for_Doctors.pdf" },
+  { label: "CDM Programme", url: "https://www.hse.ie/eng/about/who/gmscontracts/2019agreement/chronic-disease-management-programme/" },
+  { label: "Contact PCRS", url: "https://www.hse.ie/eng/staff/pcrs/contact-pcrs/" },
+];
+
+// ── Mock action data with full playbooks ──────────────────────────
+const initialActions: ActionItem[] = [
   {
     id: "1",
     severity: "critical",
-    status: "open",
-    title: "23 potential duplicate claims detected",
+    status: "not-started",
+    title: "23 potential duplicate claims detected — clawback risk €4,850",
+    shortTitle: "Duplicate Claims",
     description:
-      "8 groups of claims with matching code, date, and patient reference may be flagged for clawback.",
+      "8 groups of claims with matching code, date, and patient reference. If PCRS flags these in reconciliation, the practice faces automatic clawback.",
     impact: 4850,
     category: "Clawback Prevention",
+    estimatedTime: "45 mins",
     playbook: [
       {
         step: 1,
-        title: "Log in to PCRS Online (GP Suite)",
+        title: "Log in to PCRS Online",
         detail:
-          "Access your practice account at sspcrs.ie and navigate to the Claims History section.",
-        link: {
-          label: "Open PCRS Online",
-          url: "https://www.sspcrs.ie/portal/nmco-api/login",
-        },
+          "Open GP Suite at sspcrs.ie and navigate to Claims History. You'll need your practice's PCRS login credentials.",
+        link: { label: "Open PCRS Online →", url: "https://www.sspcrs.ie/portal/nmco-api/login" },
       },
       {
         step: 2,
-        title: "Review each duplicate group",
+        title: "Search for the 8 flagged claim groups",
         detail:
-          "Cross-reference the 8 flagged groups against your clinical records. Check if they are genuine duplicates or legitimate repeat visits on the same day.",
+          "Use the claim codes and dates from the Findings tab to search. Each group contains 2-3 claims with identical patient ref, code, and date.",
       },
       {
         step: 3,
-        title: "Void genuine duplicates",
+        title: "Cross-reference with clinical records",
         detail:
-          "For confirmed duplicates, submit a void request through GP Suite BEFORE the next PCRS reconciliation date. This prevents automatic clawback.",
+          "For each group, check your practice management system. Was this a genuine duplicate entry, or a legitimate repeat visit on the same day?",
       },
       {
         step: 4,
-        title: "Add clinical notes for legitimate claims",
+        title: "Void genuine duplicates",
         detail:
-          "For legitimate repeat visits, add distinguishing clinical notes to each claim to justify the separate billing.",
+          "For confirmed duplicates, submit a void request through GP Suite. This MUST be done before the next PCRS reconciliation (usually monthly).",
       },
       {
         step: 5,
-        title: "Confirm resolution",
+        title: "Document legitimate repeat visits",
         detail:
-          "Check the next PCRS payment schedule to verify no clawback was applied. Mark this action as confirmed once verified.",
+          "For any claims that are legitimate (e.g., patient returned same day), add distinguishing clinical notes to justify the separate billing.",
+      },
+      {
+        step: 6,
+        title: "Verify on next payment schedule",
+        detail:
+          "After the next PCRS payment cycle, check your schedule to confirm no clawback was applied. Mark this action as confirmed.",
       },
     ],
   },
   {
     id: "2",
     severity: "high",
-    status: "open",
-    title: "Chronic Disease Management severely under-claimed",
+    status: "not-started",
+    title: "Chronic Disease Management severely under-claimed — €18,200/yr potential",
+    shortTitle: "CDM Under-claiming",
     description:
-      "Practice has 380 GMS patients but only 3 CDM claims. National average is ~35% uptake.",
+      "Practice has 380 GMS patients but only 3 CDM claims. National average is ~35% uptake. At €150 per structured review, this is significant lost revenue.",
     impact: 18200,
     category: "Revenue Recovery",
+    estimatedTime: "2-3 weeks (ongoing)",
     playbook: [
       {
         step: 1,
-        title: "Run patient register report",
+        title: "Generate eligible patient list",
         detail:
-          "In your practice management system, filter GMS patients with diagnosed chronic conditions: diabetes, COPD, CVD, asthma. This is your eligible cohort.",
+          "In your practice management system, run a report filtering GMS patients diagnosed with: diabetes, COPD, cardiovascular disease, or asthma. This is your CDM-eligible cohort.",
       },
       {
         step: 2,
         title: "Review CDM programme requirements",
         detail:
-          "Each CDM claim requires a structured annual review using the approved template. Review the CDM programme guide for current requirements.",
-        link: {
-          label: "CDM Programme Guide",
-          url: "https://www.hse.ie/eng/about/who/gmscontracts/2019agreement/chronic-disease-management-programme/",
-        },
+          "Each CDM claim requires a structured annual review using the HSE-approved template. Familiarise yourself with what data points must be captured.",
+        link: { label: "CDM Programme Guide →", url: "https://www.hse.ie/eng/about/who/gmscontracts/2019agreement/chronic-disease-management-programme/" },
       },
       {
         step: 3,
-        title: "Activate CDM templates",
+        title: "Activate CDM templates in your system",
         detail:
-          "Ensure your clinical system has the structured CDM review templates enabled. These auto-populate required fields for the data return.",
+          "Your practice management software (e.g., Socrates, Health One) should have built-in CDM review templates. Activate them so they auto-populate required fields during consultations.",
       },
       {
         step: 4,
-        title: "Schedule CDM review clinics",
+        title: "Schedule dedicated CDM clinics",
         detail:
-          "Block 2-3 clinic sessions per week specifically for CDM reviews. Work through your eligible patient list systematically.",
+          "Block 2-3 clinic sessions per week specifically for CDM reviews. Work through your eligible patient list alphabetically or by condition. Invite patients by letter or text.",
       },
       {
         step: 5,
-        title: "Submit CDM data returns",
+        title: "Submit quarterly data returns",
         detail:
-          "CDM claims are submitted via your practice management software data return (not GP Suite). Ensure returns are submitted quarterly.",
+          "CDM claims are submitted via your practice management software data return — NOT through GP Suite. Ensure returns are submitted each quarter.",
       },
       {
         step: 6,
-        title: "Verify payment on schedule",
+        title: "Track payments on PCRS schedule",
         detail:
-          "CDM payments appear on your PCRS payment schedule. Expected recovery: ~€18,200/year at 35% uptake. Mark confirmed once first payments arrive.",
+          "CDM payments appear on your regular PCRS payment schedule. At 35% uptake (133 patients), expected annual revenue is approximately €18,200.",
       },
     ],
   },
   {
     id: "3",
     severity: "high",
-    status: "open",
-    title: "No Heartwatch claims submitted",
+    status: "not-started",
+    title: "No Heartwatch claims submitted — €8,500/yr potential",
+    shortTitle: "Heartwatch Programme",
     description:
-      "Practice appears eligible for Heartwatch but has zero claims this period.",
+      "Practice appears eligible for Heartwatch but has zero claims this period. Heartwatch provides structured secondary prevention for CVD patients.",
     impact: 8500,
     category: "Revenue Recovery",
+    estimatedTime: "1-2 weeks",
     playbook: [
       {
         step: 1,
-        title: "Confirm Heartwatch registration",
+        title: "Confirm Heartwatch registration status",
         detail:
-          "Contact PCRS to verify your practice's Heartwatch registration status. If not registered, request enrolment.",
-        link: {
-          label: "Contact PCRS",
-          url: "https://www.hse.ie/eng/staff/pcrs/contact-pcrs/",
-        },
+          "Call PCRS on 01 864 7100 to verify whether your practice is registered for the Heartwatch programme. If not, request enrolment — there may be a waiting list.",
+        link: { label: "Contact PCRS →", url: "https://www.hse.ie/eng/staff/pcrs/contact-pcrs/" },
       },
       {
         step: 2,
         title: "Identify eligible patients",
         detail:
-          "From your cardiovascular risk register, identify patients eligible for Heartwatch annual reviews (patients with established CVD or high CV risk).",
+          "From your cardiovascular risk register, identify patients with established CVD or assessed as high cardiovascular risk. These are your Heartwatch-eligible patients.",
       },
       {
         step: 3,
-        title: "Schedule Heartwatch clinics",
+        title: "Schedule Heartwatch annual reviews",
         detail:
-          "Heartwatch reviews require structured assessments. Schedule dedicated clinics and use the approved Heartwatch assessment template.",
+          "Heartwatch reviews require a structured assessment including BP, cholesterol, BMI, smoking status, medication review, and lifestyle counselling. Use the approved template.",
       },
       {
         step: 4,
         title: "Submit claims via GP Suite",
         detail:
-          "Heartwatch claims are submitted as STCs through PCRS Online (GP Suite). Ensure each claim has the correct Heartwatch item code.",
-        link: {
-          label: "Open PCRS Online",
-          url: "https://www.sspcrs.ie/portal/nmco-api/login",
-        },
+          "Heartwatch claims are submitted as STCs through PCRS Online. Navigate to Claims → New STC and use the Heartwatch item code.",
+        link: { label: "Open PCRS Online →", url: "https://www.sspcrs.ie/portal/nmco-api/login" },
       },
       {
         step: 5,
-        title: "Track quarterly progress",
+        title: "Aim for 85%+ review rate",
         detail:
-          "Monitor Heartwatch claim volume quarterly. Target: at least 85% of eligible patients reviewed annually. Expected recovery: ~€8,500/year.",
+          "Target at least 85% of eligible patients reviewed annually. Track progress quarterly. Expected recovery: approximately €8,500/year for a mid-size practice.",
       },
     ],
   },
   {
     id: "4",
     severity: "medium",
-    status: "open",
-    title: "34% of claims missing clinician ID",
+    status: "not-started",
+    title: "34% of claims missing clinician ID — limits analysis accuracy",
+    shortTitle: "Missing Clinician IDs",
     description:
-      "478 of 1,406 claims lack a clinician identifier, limiting per-GP analysis.",
+      "478 of 1,406 claims lack a clinician identifier. This prevents per-GP analysis and may cause issues during PCRS audits.",
     impact: null,
     category: "Data Quality",
+    estimatedTime: "15 mins",
     playbook: [
       {
         step: 1,
-        title: "Check practice management export settings",
+        title: "Open practice management export settings",
         detail:
-          "Open your practice management system's PCRS export configuration. Locate the field mapping for 'Practitioner' or 'Clinician ID'.",
+          "In your practice management system, navigate to Settings → PCRS Export (or equivalent). Find the field mapping configuration for data exports.",
       },
       {
         step: 2,
-        title: "Enable clinician ID in exports",
+        title: "Enable clinician identifier field",
         detail:
-          "Ensure the clinician identifier field is included in all PCRS data exports. This is usually a GP Medical Council number or PCRS practitioner number.",
+          "Ensure the 'Practitioner' or 'Clinician ID' field is ticked/included in all PCRS data exports. This is usually the GP's Medical Council number or PCRS practitioner number.",
       },
       {
         step: 3,
-        title: "Re-export and re-upload",
+        title: "Re-export and verify",
         detail:
-          "Generate a fresh export with the corrected settings and re-upload to the Claims Intelligence Platform for more accurate per-clinician analysis.",
+          "Generate a fresh export with the corrected settings. Open it in Excel to spot-check that the clinician ID column is populated. Then re-upload to the Claims Intelligence Platform.",
       },
     ],
   },
   {
     id: "5",
     severity: "medium",
-    status: "open",
-    title: 'Low claim volume for Special Items of Service',
+    status: "not-started",
+    title: "Low Special Items of Service claims — €3,400 potential",
+    shortTitle: "SIS Under-claiming",
     description:
-      "Only 7 SIS claims — well below median for a 3-GP practice.",
+      "Only 7 SIS claims — well below median for a 3-GP practice. Common missed items include suturing, I&D, ECGs, and spirometry.",
     impact: 3400,
     category: "Revenue Recovery",
+    estimatedTime: "30 mins + ongoing",
     playbook: [
       {
         step: 1,
         title: "Review SIS eligible procedures",
         detail:
-          "Check the PCRS Doctors Handbook for the full list of Special Items of Service. Common missed items: suturing, I&D, ECGs, spirometry, excisions.",
-        link: {
-          label: "PCRS Doctors Handbook",
-          url: "https://assets.hse.ie/media/documents/PCRS_handbook_for_Doctors.pdf",
-        },
+          "Check the PCRS Doctors Handbook for the complete list of Special Items of Service and their fee codes. Focus on procedures your practice regularly performs.",
+        link: { label: "Doctors Handbook (PDF) →", url: "https://assets.hse.ie/media/documents/PCRS_handbook_for_Doctors.pdf" },
       },
       {
         step: 2,
-        title: "Audit recent procedural consultations",
+        title: "Audit last 3 months of procedures",
         detail:
-          "Review the last 3 months of consultations involving procedures. Cross-reference against SIS claim submissions to identify unclaimed items.",
+          "Review consultations involving minor surgery, suturing, excisions, ECGs, spirometry, and other procedural work. Cross-reference against SIS claim submissions.",
       },
       {
         step: 3,
-        title: "Submit retrospective SIS claims",
+        title: "Submit retrospective claims",
         detail:
-          "SIS claims can be submitted retrospectively (within the allowed window). Submit via PCRS Online for any eligible procedures that were missed.",
-        link: {
-          label: "Open PCRS Online",
-          url: "https://www.sspcrs.ie/portal/nmco-api/login",
-        },
+          "SIS claims can be submitted retrospectively within the allowed window (usually 1 month). Submit via GP Suite for any eligible procedures that were missed.",
+        link: { label: "Open PCRS Online →", url: "https://www.sspcrs.ie/portal/nmco-api/login" },
       },
       {
         step: 4,
-        title: "Set up claiming workflow",
+        title: "Add SIS claiming to your daily workflow",
         detail:
-          "Add SIS claim prompts to your practice workflow: after each eligible procedure, the treating GP should immediately log the SIS claim in GP Suite.",
+          "After each eligible procedure, the treating GP should immediately log the SIS claim in GP Suite. Consider adding a prompt/checklist to your post-consultation workflow.",
       },
     ],
   },
 ];
 
-const resolvedActions = [
-  {
-    id: "8",
-    status: "resolved",
-    title: "Immunisation claims lack batch numbers",
-    description:
-      "14 immunisation claims updated with batch number data from vaccine fridge logs.",
-  },
-  {
-    id: "9",
-    status: "dismissed",
-    title: "18 claims with €0 amount",
-    description:
-      "Confirmed as administrative placeholder claims — no action required.",
-  },
-  {
-    id: "10",
-    status: "resolved",
-    title: "Inconsistent date formatting in 6 rows",
-    description:
-      "Fixed date format in practice management system export settings.",
-  },
-];
-
-// ── Chevron icon (no external deps) ───────────────────────────────
-function ChevronDown({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  );
+// ── Helper: format currency ───────────────────────────────────────
+function euro(n: number) {
+  return `€${n.toLocaleString()}`;
 }
 
-function ExternalLinkIcon() {
-  return (
-    <svg className="h-3 w-3 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-    </svg>
-  );
-}
-
-function MapPinIcon() {
-  return (
-    <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-// ── County lookup component ───────────────────────────────────────
-function CountyLookup() {
-  const [selectedCounty, setSelectedCounty] = useState("");
-  const counties = hseRegions.flatMap((r) => r.counties).sort();
-  const matchedRegion = selectedCounty
-    ? hseRegions.find((r) => r.counties.includes(selectedCounty))
-    : null;
+// ── Stepper View Component ────────────────────────────────────────
+function StepperView({
+  action,
+  completedSteps,
+  currentStep,
+  onStepClick,
+  onCompleteStep,
+  onBack,
+  actionStatus,
+  onAdvanceStatus,
+}: {
+  action: ActionItem;
+  completedSteps: Set<number>;
+  currentStep: number;
+  onStepClick: (step: number) => void;
+  onCompleteStep: () => void;
+  onBack: () => void;
+  actionStatus: ActionStatus;
+  onAdvanceStatus: () => void;
+}) {
+  const step = action.playbook[currentStep];
+  const allComplete = completedSteps.size === action.playbook.length;
+  const isLastStep = currentStep === action.playbook.length - 1;
 
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-medium">Find your HSE Health Region</label>
-      <select
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        value={selectedCounty}
-        onChange={(e) => setSelectedCounty(e.target.value)}
-      >
-        <option value="">Select your county...</option>
-        {counties.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-      {matchedRegion && (
-        <div className="rounded-md bg-blue-50 border border-blue-200 p-3 space-y-2">
-          <p className="text-sm font-semibold text-blue-900">
-            {matchedRegion.name}
+    <div className="flex flex-col h-full">
+      {/* Top bar — breadcrumb + back */}
+      <div className="flex items-center gap-3 border-b pb-4 mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          All Actions
+        </button>
+        <span className="text-muted-foreground">/</span>
+        <span className="text-sm font-medium truncate">{action.shortTitle}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className={`h-2.5 w-2.5 rounded-full ${trafficLight[actionStatus].dot}`} />
+          <span className="text-xs font-medium">{trafficLight[actionStatus].label}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 gap-6 min-h-0">
+        {/* Left rail — step navigator */}
+        <div className="w-64 shrink-0 space-y-1 overflow-y-auto">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+            Steps
           </p>
-          <div className="flex items-center gap-2 text-sm text-blue-800">
-            <MapPinIcon />
-            <span>{matchedRegion.contact}</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-blue-800">
-            <PhoneIcon />
-            <span>{matchedRegion.phone}</span>
+          {action.playbook.map((s, i) => {
+            const isActive = i === currentStep;
+            const isDone = completedSteps.has(i);
+            return (
+              <button
+                key={i}
+                onClick={() => onStepClick(i)}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                  isActive
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted text-muted-foreground"
+                }`}
+              >
+                {/* Step indicator */}
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    isDone
+                      ? "bg-green-100 text-green-700"
+                      : isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {isDone ? (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    s.step
+                  )}
+                </span>
+                <span className="truncate">{s.title}</span>
+              </button>
+            );
+          })}
+
+          {/* Quick links sidebar */}
+          <div className="mt-6 pt-4 border-t">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+              Quick Links
+            </p>
+            {quickLinks.map((link) => (
+              <a
+                key={link.url}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded px-3 py-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+              >
+                <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                {link.label}
+              </a>
+            ))}
           </div>
         </div>
-      )}
+
+        {/* Main content — current step */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1">
+            {/* Step header */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                <span>Step {step.step} of {action.playbook.length}</span>
+                <span>•</span>
+                <span>{action.category}</span>
+                {action.impact && (
+                  <>
+                    <span>•</span>
+                    <span className="text-green-700 font-medium">{euro(action.impact)} at stake</span>
+                  </>
+                )}
+              </div>
+              <h2 className="text-xl font-bold">{step.title}</h2>
+            </div>
+
+            {/* Step content */}
+            <div className="rounded-xl border bg-card p-6 space-y-4">
+              <p className="text-sm leading-relaxed">{step.detail}</p>
+
+              {step.link && (
+                <a
+                  href={step.link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                >
+                  {step.link.label}
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
+
+            {/* Contextual help prompt */}
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-2.5">
+              <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M12 18.75h.007v.008H12v-.008z" />
+              </svg>
+              <p className="text-xs text-muted-foreground">
+                Need help with this step? Click the <strong>AI Assistant</strong> button (bottom right) to ask questions about PCRS processes.
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="flex items-center justify-between border-t pt-4 mt-6">
+            <button
+              onClick={() => currentStep > 0 && onStepClick(currentStep - 1)}
+              disabled={currentStep === 0}
+              className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
+
+            <div className="flex items-center gap-3">
+              {/* Progress dots */}
+              <div className="flex items-center gap-1.5">
+                {action.playbook.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-2 rounded-full transition-all ${
+                      i === currentStep
+                        ? "w-6 bg-primary"
+                        : completedSteps.has(i)
+                          ? "w-2 bg-green-500"
+                          : "w-2 bg-muted-foreground/30"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {allComplete && isLastStep ? (
+              <button
+                onClick={onAdvanceStatus}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                {actionStatus === "not-started"
+                  ? "Mark In Progress"
+                  : actionStatus === "in-progress"
+                    ? "Mark Submitted"
+                    : actionStatus === "submitted"
+                      ? "Confirm Recovery"
+                      : "Completed"}
+              </button>
+            ) : (
+              <button
+                onClick={onCompleteStep}
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                {completedSteps.has(currentStep) ? "Next Step" : "Complete & Continue"}
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Action card with expandable playbook ──────────────────────────
-function ActionCard({ action }: { action: ActionItem }) {
-  const [expanded, setExpanded] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState<ActionStatus>(action.status);
-
-  const statusFlow: ActionStatus[] = ["open", "in-progress", "submitted", "confirmed"];
-  const currentIdx = statusFlow.indexOf(currentStatus);
-
-  function advanceStatus() {
-    if (currentIdx < statusFlow.length - 1) {
-      setCurrentStatus(statusFlow[currentIdx + 1]);
-    }
-  }
-
-  const nextLabel: Record<string, string> = {
-    open: "Start Working",
-    "in-progress": "Mark Submitted",
-    submitted: "Mark Confirmed",
-    confirmed: "Completed",
-  };
+// ── Pipeline Card Component ───────────────────────────────────────
+function PipelineCard({
+  action,
+  status,
+  completedStepCount,
+  onClick,
+}: {
+  action: ActionItem;
+  status: ActionStatus;
+  completedStepCount: number;
+  onClick: () => void;
+}) {
+  const tl = trafficLight[status];
+  const progress = Math.round((completedStepCount / action.playbook.length) * 100);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        {/* Header row */}
-        <div className="flex items-start gap-3">
-          <Badge
-            variant="outline"
-            className={severityStyles[action.severity] ?? ""}
-          >
-            {action.severity}
-          </Badge>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-medium">{action.title}</h3>
-              <Badge
-                variant="outline"
-                className={statusStyles[currentStatus] ?? ""}
-              >
-                {currentStatus}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {action.description}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              <span className="font-medium">Category:</span> {action.category}
-            </p>
+    <button
+      onClick={onClick}
+      className="w-full text-left rounded-xl border bg-card p-4 hover:ring-2 hover:ring-primary/20 transition-all group"
+    >
+      <div className="flex items-start gap-3">
+        {/* Traffic light dot */}
+        <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${tl.dot} ring-2 ring-offset-2 ring-offset-background ${
+          status === "not-started" ? "ring-red-200" : status === "in-progress" ? "ring-amber-200" : status === "submitted" ? "ring-blue-200" : "ring-green-200"
+        }`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="outline" className={severityStyles[action.severity]}>
+              {action.severity}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">{action.estimatedTime}</span>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {action.impact && (
-              <span className="text-sm font-semibold text-green-700 whitespace-nowrap">
-                €{action.impact.toLocaleString()}
-              </span>
-            )}
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              Playbook
-              <ChevronDown open={expanded} />
-            </button>
+          <h3 className="text-sm font-medium leading-snug group-hover:text-primary transition-colors">
+            {action.shortTitle}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+            {action.description}
+          </p>
+
+          {/* Progress bar */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  status === "confirmed" ? "bg-green-500" : "bg-primary"
+                }`}
+                style={{ width: `${status === "confirmed" ? 100 : progress}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {completedStepCount}/{action.playbook.length} steps
+            </span>
           </div>
         </div>
 
-        {/* Expandable playbook */}
-        {expanded && (
-          <div className="mt-4 space-y-4">
-            {/* Progress bar */}
-            <div className="flex items-center gap-1">
-              {statusFlow.map((s, i) => (
-                <div key={s} className="flex items-center gap-1 flex-1">
-                  <div
-                    className={`h-1.5 flex-1 rounded-full ${
-                      i <= currentIdx ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
-                  {i < statusFlow.length - 1 && (
-                    <div className="h-1.5 w-1.5 rounded-full bg-muted" />
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between text-[10px] text-muted-foreground px-1">
-              {statusFlow.map((s) => (
-                <span key={s} className={s === currentStatus ? "font-semibold text-foreground" : ""}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </span>
-              ))}
-            </div>
-
-            {/* Step-by-step playbook */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Step-by-step playbook
-              </p>
-              <ol className="space-y-3">
-                {action.playbook.map((step) => (
-                  <li key={step.step} className="flex gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                      {step.step}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{step.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {step.detail}
-                      </p>
-                      {step.link && (
-                        <a
-                          href={step.link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center text-xs font-medium text-primary hover:underline mt-1"
-                        >
-                          {step.link.label}
-                          <ExternalLinkIcon />
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            {/* Action button */}
-            {currentStatus !== "confirmed" && (
-              <button
-                onClick={advanceStatus}
-                className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                {nextLabel[currentStatus]}
-              </button>
-            )}
-            {currentStatus === "confirmed" && (
-              <div className="flex items-center justify-center gap-2 rounded-md bg-green-50 border border-green-200 p-3">
-                <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-sm font-medium text-green-700">
-                  Action completed and confirmed
-                </span>
-              </div>
-            )}
+        {/* Impact amount */}
+        <div className="shrink-0 text-right">
+          {action.impact ? (
+            <span className="text-sm font-bold text-green-700">{euro(action.impact)}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Quality</span>
+          )}
+          <div className="mt-2">
+            <svg className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </button>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────
+// ── Main Page Component ───────────────────────────────────────────
 export default function PreviewActionsPage() {
-  const totalImpact = openActions.reduce((sum, a) => sum + (a.impact ?? 0), 0);
+  // State: which action is open in the stepper (null = pipeline view)
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [currentSteps, setCurrentSteps] = useState<Record<string, number>>({});
+  const [completedSteps, setCompletedSteps] = useState<Record<string, Set<number>>>({});
+  const [statuses, setStatuses] = useState<Record<string, ActionStatus>>(
+    Object.fromEntries(initialActions.map((a) => [a.id, a.status]))
+  );
 
+  const activeAction = initialActions.find((a) => a.id === activeActionId);
+  const totalImpact = initialActions.reduce((sum, a) => sum + (a.impact ?? 0), 0);
+  const confirmedImpact = initialActions
+    .filter((a) => statuses[a.id] === "confirmed" && a.impact)
+    .reduce((sum, a) => sum + (a.impact ?? 0), 0);
+  const statusCounts = {
+    "not-started": initialActions.filter((a) => statuses[a.id] === "not-started").length,
+    "in-progress": initialActions.filter((a) => statuses[a.id] === "in-progress").length,
+    submitted: initialActions.filter((a) => statuses[a.id] === "submitted").length,
+    confirmed: initialActions.filter((a) => statuses[a.id] === "confirmed").length,
+  };
+
+  function getCompletedSet(id: string): Set<number> {
+    return completedSteps[id] ?? new Set();
+  }
+
+  function handleCompleteStep(actionId: string) {
+    const step = currentSteps[actionId] ?? 0;
+    const action = initialActions.find((a) => a.id === actionId)!;
+    const newSet = new Set(getCompletedSet(actionId));
+    newSet.add(step);
+    setCompletedSteps((prev) => ({ ...prev, [actionId]: newSet }));
+
+    // Auto-advance to next incomplete step
+    if (step < action.playbook.length - 1) {
+      setCurrentSteps((prev) => ({ ...prev, [actionId]: step + 1 }));
+    }
+
+    // Auto-set status to in-progress on first step completion
+    if (statuses[actionId] === "not-started") {
+      setStatuses((prev) => ({ ...prev, [actionId]: "in-progress" }));
+    }
+  }
+
+  function handleAdvanceStatus(actionId: string) {
+    const flow: ActionStatus[] = ["not-started", "in-progress", "submitted", "confirmed"];
+    const current = statuses[actionId];
+    const idx = flow.indexOf(current);
+    if (idx < flow.length - 1) {
+      setStatuses((prev) => ({ ...prev, [actionId]: flow[idx + 1] }));
+    }
+  }
+
+  // ── Stepper View ──
+  if (activeAction) {
+    return (
+      <div className="h-full flex flex-col">
+        <StepperView
+          action={activeAction}
+          completedSteps={getCompletedSet(activeAction.id)}
+          currentStep={currentSteps[activeAction.id] ?? 0}
+          onStepClick={(step) =>
+            setCurrentSteps((prev) => ({ ...prev, [activeAction.id]: step }))
+          }
+          onCompleteStep={() => handleCompleteStep(activeAction.id)}
+          onBack={() => setActiveActionId(null)}
+          actionStatus={statuses[activeAction.id]}
+          onAdvanceStatus={() => handleAdvanceStatus(activeAction.id)}
+        />
+        <AIAssistant />
+      </div>
+    );
+  }
+
+  // ── Pipeline View (default) ──
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold">Actions</h1>
-        <p className="text-muted-foreground text-sm">
-          Guided workflows to recover revenue and prevent clawbacks
-        </p>
+      {/* Hero header */}
+      <div className="rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Recovery Centre</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Step-by-step guided workflows to recover revenue and prevent clawbacks
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold text-green-700">{euro(totalImpact)}</p>
+            <p className="text-xs text-muted-foreground">potential recovery identified</p>
+            {confirmedImpact > 0 && (
+              <p className="text-sm font-medium text-green-600 mt-1">
+                {euro(confirmedImpact)} confirmed
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs font-medium text-muted-foreground">
-              Open Actions
-            </p>
-            <p className="text-2xl font-bold mt-1">{openActions.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs font-medium text-muted-foreground">
-              Potential Recovery
-            </p>
-            <p className="text-2xl font-bold text-green-700 mt-1">
-              €{totalImpact.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs font-medium text-muted-foreground">
-              Resolved
-            </p>
-            <p className="text-2xl font-bold mt-1">{resolvedActions.length}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main tabs */}
-      <Tabs defaultValue="actions">
-        <TabsList>
-          <TabsTrigger value="actions">
-            Action Playbooks ({openActions.length})
-          </TabsTrigger>
-          <TabsTrigger value="resources">
-            PCRS Resources
-          </TabsTrigger>
-          <TabsTrigger value="contacts">
-            Contacts & Directory
-          </TabsTrigger>
-          <TabsTrigger value="resolved">
-            Resolved ({resolvedActions.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── Action Playbooks tab ── */}
-        <TabsContent value="actions" className="space-y-3 mt-4">
-          <p className="text-xs text-muted-foreground">
-            Click <strong>Playbook</strong> on any action to see the step-by-step
-            guide. Track your progress from Open → In Progress → Submitted → Confirmed.
-          </p>
-          {openActions.map((action) => (
-            <ActionCard key={action.id} action={action} />
-          ))}
-        </TabsContent>
-
-        {/* ── PCRS Resources tab ── */}
-        <TabsContent value="resources" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>PCRS Portals & Forms</CardTitle>
-              <CardDescription>
-                Direct links to the systems and documents you need to submit and
-                manage claims
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {pcrsResources.map((r) => (
-                <a
-                  key={r.url}
-                  href={r.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start gap-3 rounded-md border p-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                    <ExternalLinkIcon />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{r.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.description}
-                    </p>
-                  </div>
-                </a>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Claim Submission Quick Reference</CardTitle>
-              <CardDescription>
-                How each claim type is submitted to PCRS
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="pb-2 pr-4 font-medium">Claim Type</th>
-                      <th className="pb-2 pr-4 font-medium">Submission Method</th>
-                      <th className="pb-2 font-medium">Frequency</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">GMS Capitation</td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        Automatic via GMS panel registration
-                      </td>
-                      <td className="py-2 text-muted-foreground">Monthly</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">
-                        STCs (Special Type Consultations)
-                      </td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        GP Suite (sspcrs.ie) — fee per service
-                      </td>
-                      <td className="py-2 text-muted-foreground">Per claim</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">
-                        CDM (Chronic Disease Mgmt)
-                      </td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        Practice management software data return
-                      </td>
-                      <td className="py-2 text-muted-foreground">Quarterly</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">Vaccinations</td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        GP Suite Online — batch or individual
-                      </td>
-                      <td className="py-2 text-muted-foreground">Per claim</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">
-                        Special Items of Service
-                      </td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        GP Suite (sspcrs.ie) — SIS claim form
-                      </td>
-                      <td className="py-2 text-muted-foreground">Per claim</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4 font-medium">Heartwatch</td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        GP Suite (sspcrs.ie) — STC item code
-                      </td>
-                      <td className="py-2 text-muted-foreground">Per review</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Contacts & Directory tab ── */}
-        <TabsContent value="contacts" className="mt-4 space-y-4">
-          {/* PCRS Central Office */}
-          <Card>
-            <CardHeader>
-              <CardTitle>PCRS Central Office</CardTitle>
-              <CardDescription>
-                Primary contact for all PCRS claims, payments, and registrations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <PhoneIcon />
-                <div>
-                  <p className="text-sm font-medium">01 864 7100</p>
-                  <p className="text-xs text-muted-foreground">
-                    Monday to Friday, 9:00 – 17:00
-                  </p>
+      {/* Traffic light summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {(Object.entries(trafficLight) as [ActionStatus, typeof trafficLight[ActionStatus]][]).map(
+          ([status, config]) => (
+            <Card key={status} className={`${statusCounts[status] > 0 ? config.bg : ""} border`}>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <span className={`h-3 w-3 rounded-full ${config.dot}`} />
+                  <span className="text-xs font-medium">{config.label}</span>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <svg className="h-4 w-4 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium">pcrs@hse.ie</p>
-                  <p className="text-xs text-muted-foreground">
-                    General enquiries and claim queries
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <MapPinIcon />
-                <div>
-                  <p className="text-sm font-medium">
-                    PCRS, Exit 5 M50, North Road, Finglas, Dublin 11
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    D11 XKF3
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* HSE Health Region Lookup */}
-          <Card>
-            <CardHeader>
-              <CardTitle>HSE Health Region Lookup</CardTitle>
-              <CardDescription>
-                Select your county to find your regional HSE contact for local
-                queries
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CountyLookup />
-            </CardContent>
-          </Card>
-
-          {/* All Regions Overview */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All HSE Health Regions</CardTitle>
-              <CardDescription>
-                6 regions covering the 26 counties of Ireland
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {hseRegions.map((region) => (
-                <div
-                  key={region.name}
-                  className="rounded-md border p-3 space-y-1"
-                >
-                  <p className="text-sm font-semibold">{region.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {region.counties.join(", ")}
-                  </p>
-                  <div className="flex items-center gap-4 mt-1">
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <PhoneIcon />
-                      {region.phone}
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPinIcon />
-                      {region.contact}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Resolved tab ── */}
-        <TabsContent value="resolved" className="space-y-3 mt-4">
-          {resolvedActions.map((item) => (
-            <Card key={item.id} className="opacity-75">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <Badge
-                    variant="outline"
-                    className={statusStyles[item.status] ?? ""}
-                  >
-                    {item.status}
-                  </Badge>
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium">{item.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {item.description}
-                    </p>
-                  </div>
-                </div>
+                <p className="text-2xl font-bold mt-1">{statusCounts[status]}</p>
               </CardContent>
             </Card>
+          )
+        )}
+      </div>
+
+      {/* How it works */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-6 justify-center flex-wrap">
+            {[
+              { icon: "🔍", label: "Review Finding", sub: "Understand the issue" },
+              { icon: "📋", label: "Follow Playbook", sub: "Step-by-step guide" },
+              { icon: "📤", label: "Submit to PCRS", sub: "Via GP Suite or PMS" },
+              { icon: "✅", label: "Confirm Recovery", sub: "Verify on schedule" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3">
+                {i > 0 && (
+                  <svg className="h-4 w-4 text-muted-foreground/40 -ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+                <div className="text-center">
+                  <span className="text-2xl">{item.icon}</span>
+                  <p className="text-xs font-medium mt-1">{item.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Action pipeline cards */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Your Actions</h2>
+          <p className="text-xs text-muted-foreground">
+            Click any action to start the guided workflow
+          </p>
+        </div>
+        <div className="space-y-3">
+          {initialActions.map((action) => (
+            <PipelineCard
+              key={action.id}
+              action={action}
+              status={statuses[action.id]}
+              completedStepCount={getCompletedSet(action.id).size}
+              onClick={() => setActiveActionId(action.id)}
+            />
           ))}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
+
+      {/* PCRS Quick Reference */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">PCRS Quick Reference</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Contact PCRS
+              </p>
+              <div className="flex items-center gap-2 text-sm">
+                <span>📞</span> <span className="font-medium">01 864 7100</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span>📧</span> <span className="font-medium">pcrs@hse.ie</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <span>📍</span> <span className="text-muted-foreground">Exit 5 M50, North Road, Finglas, Dublin 11</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Key Resources
+              </p>
+              {quickLinks.slice(0, 4).map((link) => (
+                <a
+                  key={link.url}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-primary hover:underline"
+                >
+                  <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI Assistant floating button */}
+      <AIAssistant />
     </div>
   );
 }
