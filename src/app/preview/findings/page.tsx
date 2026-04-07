@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -17,139 +20,277 @@ const severityStyles: Record<string, string> = {
 };
 
 const typeLabels: Record<string, string> = {
-  clawback_risk: "Clawback Risk",
   underclaiming: "Underclaiming",
+  grant: "Grant / Subsidy",
   compliance: "Compliance",
-  data_quality: "Data Quality",
+  leave: "Leave Entitlement",
+  programme: "Programme Uptake",
+  process: "Process Improvement",
 };
 
+// ── Findings derived from Asumpta's real PCRS analysis report ────
 const mockFindings = [
+  // ── Critical: Medical Indemnity ──
   {
-    id: "1",
+    id: "mi-1",
     severity: "critical",
-    type: "clawback_risk",
-    title: "23 potential duplicate claims detected",
+    type: "underclaiming",
+    gp: "Dr A",
+    title: "Medical indemnity refund unclaimed — 75% band",
     description:
-      "Found 8 groups of claims with matching code, date, and patient reference.",
-    impact: 4850,
-    direction: "negative",
+      "Panel 1,022–1,099 qualifies for 75% refund. No cover letter with renewed certificate submitted to CHO in 36 months.",
+    impact: 9546,
+    direction: "positive",
     status: "open",
   },
   {
-    id: "2",
+    id: "mi-2",
     severity: "critical",
-    type: "clawback_risk",
-    title: "Overlapping GMS consultation and out-of-hours claims",
+    type: "underclaiming",
+    gp: "Dr B",
+    title: "Medical indemnity refund unclaimed — 50% band",
     description:
-      "5 instances where GMS consultations overlap with OOH claims on the same day for the same patient.",
-    impact: 1200,
-    direction: "negative",
+      "Panel 913–972 qualifies for 50% refund. Annual submission to CHO required but not done.",
+    impact: 6364,
+    direction: "positive",
     status: "open",
   },
   {
-    id: "3",
-    severity: "high",
-    type: "data_quality",
-    title: "12 claims have future dates",
+    id: "mi-3",
+    severity: "critical",
+    type: "underclaiming",
+    gp: "Dr C",
+    title: "Medical indemnity refund unclaimed — 95% band (highest tier)",
     description:
-      "Claims dated after today found — likely data entry errors or formatting issues.",
+      "Panel reached 1,257 = highest 95% refund tier. Estimated €4,031/year unclaimed. This is the single largest individual GP gap.",
+    impact: 12092,
+    direction: "positive",
+    status: "open",
+  },
+  // ── Critical: Practice Grant ──
+  {
+    id: "pg-1",
+    severity: "critical",
+    type: "grant",
+    gp: "Practice",
+    title: "€45,000 Practice Support Grant not applied for",
+    description:
+      "3 qualifying GPs × €15,000 grant. Secretary hired Dec 2023 received €0 subsidy over 14 months — strongest case. Nurse hired Aug 2025 provides current active case.",
+    impact: 45000,
+    direction: "positive",
+    status: "open",
+  },
+  // ── High: Leave ──
+  {
+    id: "lv-1",
+    severity: "high",
+    type: "leave",
+    gp: "Dr A",
+    title: "Leave year 2022/23: 28 days annual leave unclaimed",
+    description:
+      "Entitlement 28 days (panel 1,000+) at €197.24/day. Zero days claimed for this leave year. May be outside claimable window.",
+    impact: 5523,
+    direction: "positive",
+    status: "open",
+  },
+  {
+    id: "lv-2",
+    severity: "high",
+    type: "leave",
+    gp: "Dr C",
+    title: "Leave year 2022/23: 30 days annual leave unclaimed",
+    description:
+      "Entitlement 30 days (panel 1,200+) at €197.24/day. Zero days claimed — Sep 2022 claim processed at 0 days/€0.",
+    impact: 5917,
+    direction: "positive",
+    status: "open",
+  },
+  {
+    id: "lv-3",
+    severity: "high",
+    type: "leave",
+    gp: "All GPs",
+    title: "Study leave significantly under-claimed across practice",
+    description:
+      "Dr A: 11/30 days claimed. Dr B: 5/30 days claimed. Dr C: 6/30 days claimed. Combined ~64 unclaimed study leave days.",
+    impact: 12624,
+    direction: "positive",
+    status: "open",
+  },
+  {
+    id: "lv-4",
+    severity: "medium",
+    type: "leave",
+    gp: "Dr B",
+    title: "Leave year 2024/25: 8 days annual leave balance at risk",
+    description:
+      "17 of 25 days claimed with 8 remaining. Must be claimed before 31 March deadline.",
+    impact: 1578,
+    direction: "positive",
+    status: "open",
+  },
+  // ── High: Programme uptake ──
+  {
+    id: "ac-1",
+    severity: "high",
+    type: "programme",
+    gp: "All GPs",
+    title: "Under-6 Asthma Cycle of Care — 1 registration in 36 months",
+    description:
+      "Combined Under-6 panel of 409 children but only 1 Asthma CoC registration (Dr B, Apr 2023). Registration fee €50 + ongoing capitation €3.75–€11.25/month per child.",
+    impact: null,
+    direction: "positive",
+    status: "open",
+  },
+  {
+    id: "pp-1",
+    severity: "medium",
+    type: "programme",
+    gp: "All GPs",
+    title: "CDM Prevention Programme under-utilised",
+    description:
+      "Only 85 PP consultations in 2025 across practice vs 350+ patients aged 65+ eligible. €82 + superannuation per consultation. CDM Treatment active and growing but PP lagging.",
+    impact: null,
+    direction: "positive",
+    status: "open",
+  },
+  // ── Medium: Process ──
+  {
+    id: "pr-1",
+    severity: "medium",
+    type: "process",
+    gp: "Practice",
+    title: "M&I Scheme still on paper-based claiming",
+    description:
+      "All three GPs still using paper-based M&I claiming. Online submission would improve cash flow and reduce processing delays.",
     impact: null,
     direction: null,
     status: "open",
   },
   {
-    id: "4",
-    severity: "high",
-    type: "underclaiming",
-    title: "Chronic Disease Management severely under-claimed",
-    description:
-      "Practice has 380 GMS patients but only 3 CDM claims. National average is ~35% uptake.",
-    impact: 18200,
-    direction: "positive",
-    status: "open",
-  },
-  {
-    id: "5",
-    severity: "high",
-    type: "underclaiming",
-    title: "No Heartwatch claims submitted",
-    description:
-      "Practice appears eligible for Heartwatch but has zero claims in this period.",
-    impact: 8500,
-    direction: "positive",
-    status: "in_progress",
-  },
-  {
-    id: "6",
-    severity: "medium",
-    type: "data_quality",
-    title: "34% of claims missing clinician ID",
-    description:
-      "478 out of 1,406 claims have no clinician identifier.",
-    impact: null,
-    direction: null,
-    status: "open",
-  },
-  {
-    id: "7",
-    severity: "medium",
-    type: "underclaiming",
-    title: 'Low claim volume for "Special Items of Service"',
-    description:
-      "Only 7 SIS claims in this quarter — well below the median for a 3-GP practice.",
-    impact: 3400,
-    direction: "positive",
-    status: "open",
-  },
-  {
-    id: "8",
-    severity: "medium",
-    type: "compliance",
-    title: "Immunisation claims lack batch numbers",
-    description:
-      "14 immunisation claims are missing vaccine batch number data.",
-    impact: null,
-    direction: null,
-    status: "resolved",
-  },
-  {
-    id: "9",
+    id: "pr-2",
     severity: "low",
-    type: "compliance",
-    title: "18 claims with €0 amount",
+    type: "process",
+    gp: "Practice",
+    title: "No quarterly PCRS statement review process in place",
     description:
-      "Zero-value claims — may be administrative or incomplete.",
+      "Implementing quarterly reviews against entitlements would catch emerging gaps early and prevent systemic under-claiming.",
     impact: null,
     direction: null,
-    status: "dismissed",
-  },
-  {
-    id: "10",
-    severity: "low",
-    type: "data_quality",
-    title: "Inconsistent date formatting in 6 rows",
-    description:
-      "Mixed DD/MM/YYYY and MM/DD/YYYY formats detected in the source file.",
-    impact: null,
-    direction: null,
-    status: "resolved",
+    status: "open",
   },
 ];
 
+type FilterType = "all" | "critical" | "high" | "medium" | "low";
+type GPFilter = "all" | "Dr A" | "Dr B" | "Dr C" | "All GPs" | "Practice";
+
 export default function PreviewFindingsPage() {
+  const [severityFilter, setSeverityFilter] = useState<FilterType>("all");
+  const [gpFilter, setGpFilter] = useState<GPFilter>("all");
+
+  const filtered = mockFindings.filter((f) => {
+    if (severityFilter !== "all" && f.severity !== severityFilter) return false;
+    if (gpFilter !== "all" && f.gp !== gpFilter) return false;
+    return true;
+  });
+
+  const totalImpact = mockFindings
+    .filter((f) => f.impact && f.status === "open")
+    .reduce((sum, f) => sum + (f.impact ?? 0), 0);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Findings</h1>
         <p className="text-muted-foreground text-sm">
-          All analysis findings across your claims data
+          Gap analysis across 36 months of PCRS payment data for 3 panel holders
         </p>
       </div>
 
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground">Total Findings</p>
+            <p className="text-2xl font-bold">{mockFindings.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50 border-red-200">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-red-700">Critical</p>
+            <p className="text-2xl font-bold text-red-700">
+              {mockFindings.filter((f) => f.severity === "critical").length}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-orange-50 border-orange-200">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-orange-700">High</p>
+            <p className="text-2xl font-bold text-orange-700">
+              {mockFindings.filter((f) => f.severity === "high").length}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-green-700">Recoverable</p>
+            <p className="text-2xl font-bold text-green-700">
+              €{totalImpact.toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Severity:
+          </span>
+          {(["all", "critical", "high", "medium", "low"] as FilterType[]).map(
+            (level) => (
+              <button
+                key={level}
+                onClick={() => setSeverityFilter(level)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  severityFilter === level
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {level === "all" ? "All" : level.charAt(0).toUpperCase() + level.slice(1)}
+              </button>
+            )
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">GP:</span>
+          {(["all", "Dr A", "Dr B", "Dr C", "All GPs", "Practice"] as GPFilter[]).map(
+            (gp) => (
+              <button
+                key={gp}
+                onClick={() => setGpFilter(gp)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  gpFilter === gp
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {gp === "all" ? "All" : gp}
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Findings table */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            {mockFindings.length} Findings
+            {filtered.length} Finding{filtered.length !== 1 ? "s" : ""}
+            {severityFilter !== "all" || gpFilter !== "all"
+              ? " (filtered)"
+              : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -157,14 +298,15 @@ export default function PreviewFindingsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Severity</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>GP</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead>Finding</TableHead>
                 <TableHead>Impact</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockFindings.map((finding) => (
+              {filtered.map((finding) => (
                 <TableRow key={finding.id}>
                   <TableCell>
                     <Badge
@@ -174,11 +316,14 @@ export default function PreviewFindingsPage() {
                       {finding.severity}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell>
+                    <span className="text-sm font-medium">{finding.gp}</span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
                     {typeLabels[finding.type] ?? finding.type}
                   </TableCell>
                   <TableCell>
-                    <div className="max-w-[300px]">
+                    <div className="max-w-[350px]">
                       <p className="text-sm font-medium">{finding.title}</p>
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {finding.description}
@@ -187,33 +332,103 @@ export default function PreviewFindingsPage() {
                   </TableCell>
                   <TableCell>
                     {finding.impact ? (
-                      <span
-                        className={
-                          finding.direction === "positive"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {finding.direction === "positive" ? "+" : "-"}€
-                        {finding.impact.toLocaleString()}
+                      <span className="text-green-600 font-medium">
+                        +€{finding.impact.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        finding.status === "resolved" ? "default" : "outline"
-                      }
-                    >
-                      {finding.status}
-                    </Badge>
+                    <Badge variant="outline">{finding.status}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Per-GP gap summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Gap Summary by GP</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 pr-4 font-medium">Gap Area</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Dr A</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Dr B</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Dr C</th>
+                  <th className="pb-2 font-medium text-right">Total</th>
+                  <th className="pb-2 pl-4 font-medium">Priority</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                <tr>
+                  <td className="py-2 pr-4 font-medium">Medical Indemnity</td>
+                  <td className="py-2 pr-4 text-right">€9,546</td>
+                  <td className="py-2 pr-4 text-right">€6,364</td>
+                  <td className="py-2 pr-4 text-right">€12,092</td>
+                  <td className="py-2 text-right font-semibold text-green-700">€28,002</td>
+                  <td className="py-2 pl-4">
+                    <Badge variant="outline" className={severityStyles.critical}>HIGH</Badge>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium">Unclaimed Leave</td>
+                  <td className="py-2 pr-4 text-right">€9,468</td>
+                  <td className="py-2 pr-4 text-right">€5,523</td>
+                  <td className="py-2 pr-4 text-right">€10,651</td>
+                  <td className="py-2 text-right font-semibold text-green-700">€25,642</td>
+                  <td className="py-2 pl-4">
+                    <Badge variant="outline" className={severityStyles.critical}>HIGH</Badge>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium">Practice Grant</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground" colSpan={3}>
+                    Practice-wide: 3 × €15,000
+                  </td>
+                  <td className="py-2 text-right font-semibold text-green-700">€45,000</td>
+                  <td className="py-2 pl-4">
+                    <Badge variant="outline" className={severityStyles.critical}>HIGH</Badge>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium">U6 Asthma CoC</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">0 reg</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">1 reg</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">0 reg</td>
+                  <td className="py-2 text-right text-muted-foreground">1 total</td>
+                  <td className="py-2 pl-4">
+                    <Badge variant="outline" className={severityStyles.high}>HIGH</Badge>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium">PP Under-utilisation</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">21</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">26</td>
+                  <td className="py-2 pr-4 text-right text-muted-foreground">38</td>
+                  <td className="py-2 text-right text-muted-foreground">85 consults</td>
+                  <td className="py-2 pl-4">
+                    <Badge variant="outline" className={severityStyles.medium}>MED</Badge>
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 font-bold">
+                  <td className="pt-2 pr-4">Total Quantifiable</td>
+                  <td className="pt-2 pr-4" colSpan={3}></td>
+                  <td className="pt-2 text-right text-green-700">€98,644</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>
